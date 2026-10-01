@@ -9,6 +9,7 @@ service ChatInternal {
   rpc GetUnreadMessages (UnreadMessagesRequest) returns (UnreadMessagesResponse);
   rpc GetUserMessagesInChat (UserMessagesInChatRequest) returns (UserMessagesInChatResponse);
   rpc GetRecentMessages (RecentMessagesRequest) returns (RecentMessagesResponse);
+  rpc GetDirectChats (UserIdRequest) returns (DirectChatsResponse);
 }
 
 message SendMessageInternalRequest{
@@ -90,4 +91,17 @@ message RecentMessage {
 
 message RecentMessagesResponse {
   repeated RecentMessage messages = 1;
+}
+
+message UserIdRequest {
+  string userId = 1;
+}
+
+message DirectChat {
+  string chatId = 1;
+  string otherMemberId = 2;
+}
+
+message DirectChatsResponse {
+  repeated DirectChat chats = 1;
 }

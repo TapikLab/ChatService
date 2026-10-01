@@ -85,4 +85,10 @@ export class GrpcChatController {
     );
     return { messages };
   }
+
+  @GrpcMethod('ChatInternal', 'GetDirectChats')
+  async getDirectChats(data: { userId: string }) {
+    const chats = await this.chatsService.getDirectChats(data.userId);
+    return { chats };
+  }
 }

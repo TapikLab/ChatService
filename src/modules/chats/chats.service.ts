@@ -315,6 +315,26 @@ export class ChatsService {
     return chats.filter((c): c is NonNullable<typeof c> => c !== null);
   }
 
+  async getDirectChats(userId: string) {
+    const userChats = await this.getUserChats(userId);
+
+    const chats = await Promise.all(
+      userChats.map(async (row) => {
+        const chatId = String(row.get('chat_id'));
+        const chat = await this.getChat(chatId);
+        if (chat.get('type') !== 'direct') return null;
+
+        const memberIds = await this.getMemberIds(chatId);
+        const otherMemberId = memberIds.find((id) => id !== userId) ?? '';
+        if (!otherMemberId) return null;
+
+        return { chatId, otherMemberId };
+      }),
+    );
+
+    return chats.filter((c): c is NonNullable<typeof c> => c !== null);
+  }
+
   async getUserMessagesInChat(chatId: string, userId: string, limit = 15) {
     const result = await this.cassandra.client.execute(
       `SELECT content, sender_id, via_assistant FROM messages WHERE chat_id = ? LIMIT ?`,
