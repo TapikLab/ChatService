@@ -8,8 +8,8 @@ import {
   Param,
   Delete,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
-import { AuthenticatedRequest } from '../../common/auth/authenticated-request.interface';
+import { JwtAuthGuard } from '@common/auth/jwt-auth.guard';
+import { AuthenticatedRequest } from '@common/auth/authenticated-request.interface';
 import { ChatsService } from './chats.service';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { AddMembersDto } from './dto/add-members.dto';

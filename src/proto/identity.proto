@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package identity;
+
+service IdentityInternal {
+  rpc GetDeviceKey (GetDeviceKeyRequest) returns (GetDeviceKeyResponse);
+}
+
+message GetDeviceKeyRequest {
+  string userId = 1;
+  string deviceId = 2;
+}
+
+message GetDeviceKeyResponse {
+  bool found = 1;
+  string publicKey = 2;
+  bool revoked = 3;
+}

@@ -11,17 +11,23 @@ import {
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { SendMessageDto } from './dto/send-message.dto';
+import { SignedMessagesService } from './signing/signed-messages.service';
 import { JwtAuthGuard } from '@common/auth/jwt-auth.guard';
 import { AuthenticatedRequest } from '@common/auth/authenticated-request.interface';
+import { SendSignedMessageDto } from './dto/send-signed-message.dto';
+import { GetChainQueryDto } from './dto/get-chain-query.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('chats')
 export class MessagesController {
-  constructor(private readonly messagesService: MessagesService) {}
+  constructor(
+    private readonly messagesService: MessagesService,
+    private readonly signedMessagesService: SignedMessagesService,
+  ) {}
 
   @Post('messages')
-  send(@Req() req: AuthenticatedRequest, @Body() dto: SendMessageDto) {
-    return this.messagesService.sendMessage(req.user.userId, dto);
+  send(@Req() req: AuthenticatedRequest, @Body() dto: SendSignedMessageDto) {
+    return this.signedMessagesService.send(req.user.userId, dto);
   }
 
   @Get(':chatId/messages')
@@ -46,6 +52,20 @@ export class MessagesController {
       req.user.userId,
       parsedLimit,
       before,
+    );
+  }
+
+  @Get(':chatId/chain')
+  async chain(
+    @Req() req: AuthenticatedRequest,
+    @Param('chatId') chatId: string,
+    @Query() query: GetChainQueryDto,
+  ) {
+    return this.messagesService.getChain(
+      chatId,
+      req.user.userId,
+      query.limit,
+      query.before,
     );
   }
 }
