@@ -53,8 +53,9 @@ export class DeviceChainService {
       after &&
       after.lastSeq === input.seq &&
       after.lastSignature === input.signature
-    )
-      return messageId;
+    ) {
+      return after.lastMessageId;
+    }
 
     throw new ConflictException('CHAIN_RACE_LOST: повторите отправку');
   }

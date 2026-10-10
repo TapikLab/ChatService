@@ -1,5 +1,9 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
-import { ConflictException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { MessagesService } from '../messages.service';
 import { SendSignedMessageDto } from '../dto/send-signed-message.dto';
@@ -10,6 +14,7 @@ import {
   computeMessageHash,
   verifyEd25519,
 } from './message-signature';
+import { readCheckpoint, verifyCheckpoint } from './checkpoint';
 import { IdentityClientService } from '@modules/identity-client/identity-client.service';
 import { RedisService } from '@common/redis/redis.service';
 
@@ -40,6 +45,31 @@ export class SignedMessagesService {
       throw new ForbiddenException(
         'Устройство не зарегистрировано или отозвано',
       );
+    }
+
+    let checkpoint: ReturnType<typeof readCheckpoint>;
+    try {
+      checkpoint = readCheckpoint(dto.content);
+    } catch (error) {
+      throw new BadRequestException('INVALID_CHECKPOINT');
+    }
+
+    if (checkpoint) {
+      if (dto.attachments?.length) {
+        throw new BadRequestException('CHECKPOINT_ATTACHMENTS_FORBIDDEN');
+      }
+
+      if (
+        checkpoint.chatId !== dto.chatId ||
+        checkpoint.userId !== userId ||
+        checkpoint.deviceId !== dto.senderDeviceId
+      ) {
+        throw new ForbiddenException('CHECKPOINT_IDENTITY_MISMATCH');
+      }
+
+      if (!verifyCheckpoint(checkpoint, publicKey)) {
+        throw new ForbiddenException('INVALID_CHECKPOINT_SIGNATURE');
+      }
     }
 
     const signingPayload = buildSigningPayload({

@@ -1,0 +1,11 @@
+{
+  "rootDir": "../..",
+  "testEnvironment": "node",
+  "testMatch": ["<rootDir>/test/checkpoint/*.spec.ts"],
+  "transform": {
+    "^.+\\.ts$": [
+      "ts-jest",
+      { "tsconfig": "<rootDir>/test/checkpoint/tsconfig.json" }
+    ]
+  }
+}

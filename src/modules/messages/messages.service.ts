@@ -5,6 +5,7 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { ChatChainService } from './signing/chat-chain.service';
 import { computeServerMessageHash } from './signing/chain-hash';
 import { computeContentHash } from './signing/message-signature';
+import { readCheckpoint } from './signing/checkpoint';
 import { CassandraService } from '@common/cassandra/cassandra.service';
 import { ChatsService } from '@modules/chats/chats.service';
 import {
@@ -57,11 +58,24 @@ export class MessagesService {
 
     await this.chatsService.assertMember(dto.chatId, senderId);
 
-    const type = dto.attachments?.length
-      ? dto.content
-        ? 'mixed'
-        : dto.attachments[0].type
-      : 'text';
+    let checkpoint: ReturnType<typeof readCheckpoint>;
+    try {
+      checkpoint = readCheckpoint(dto.content);
+    } catch (error) {
+      throw new BadRequestException('INVALID_CHECKPOINT');
+    }
+
+    if (checkpoint && (!signed || viaAssistant || dto.attachments?.length)) {
+      throw new BadRequestException('INVALID_CHECKPOINT_MESSAGE');
+    }
+
+    const type = checkpoint
+      ? 'CHECKPOINT'
+      : dto.attachments?.length
+        ? dto.content
+          ? 'mixed'
+          : dto.attachments[0].type
+        : 'text';
 
     if (dto.attachments?.length) {
       const verifications = await Promise.all(
@@ -94,7 +108,7 @@ export class MessagesService {
           senderId,
           content: dto.content,
           type,
-          attachment: dto.attachments,
+          attachments: dto.attachments,
           createdAt,
           chatSeq: stored.chatSeq,
           chainHash: stored.chainHash,
@@ -211,21 +225,23 @@ export class MessagesService {
       chainHash,
     });
 
-    this.notificationClient.emit('message.sent', {
-      chatId: dto.chatId,
-      senderId,
-      content: dto.content,
-      recipientIds,
-    });
+    if (!checkpoint) {
+      this.notificationClient.emit('message.sent', {
+        chatId: dto.chatId,
+        senderId,
+        content: dto.content,
+        recipientIds,
+      });
 
-    this.assistantClient.emit('message.sent', {
-      chatId: dto.chatId,
-      messageId: messageId.toString(),
-      senderId,
-      content: dto.content,
-      recipientIds,
-      viaAssistant,
-    });
+      this.assistantClient.emit('message.sent', {
+        chatId: dto.chatId,
+        messageId: messageId.toString(),
+        senderId,
+        content: dto.content,
+        recipientIds,
+        viaAssistant,
+      });
+    }
 
     return {
       chatId: dto.chatId,
@@ -333,6 +349,9 @@ export class MessagesService {
 
     return result.rows.map((row) => ({
       ...row,
+      chatId: String(row.get('chat_id')),
+      messageId: String(row.get('message_id')),
+      senderId: String(row.get('sender_id')),
       chatSeq: (row.get('chat_seq') as types.Long | null)?.toNumber() ?? null,
       chainHash: (row.get('chain_hash') as string | null) ?? null,
       messageHash: (row.get('message_hash') as string | null) ?? null,
@@ -349,6 +368,7 @@ export class MessagesService {
         const isAvailable = lookup?.isAvailable ?? false;
         return {
           ...attachment,
+          mediaId: String(attachment.media_id),
           url: isAvailable ? (lookup?.url ?? null) : null,
           isAvailable,
         };

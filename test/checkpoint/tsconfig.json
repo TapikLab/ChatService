@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true,
+    "incremental": false,
+    "types": ["node", "jest"]
+  },
+  "include": ["./*.ts"],
+  "exclude": []
+}
