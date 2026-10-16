@@ -1,3 +1,4 @@
+import { SignedMessagesService } from './signing/signed-messages.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
@@ -8,7 +9,10 @@ describe('MessagesController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MessagesController],
-      providers: [{ provide: MessagesService, useValue: {} }],
+      providers: [
+        { provide: MessagesService, useValue: {} },
+        { provide: SignedMessagesService, useValue: {} },
+      ],
     }).compile();
 
     controller = module.get<MessagesController>(MessagesController);

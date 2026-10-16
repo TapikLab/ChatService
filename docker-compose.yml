@@ -6,8 +6,8 @@ services:
     container_name: chat-alpha-scylla
     restart: unless-stopped
     ports:
-      - "9042:9042"
-    command: --smp 1 --memory 750M --overprovisioned 1
+      - '9042:9042'
+    command: --smp 1 --memory 750M --overprovisioned 1 --authenticator PasswordAuthenticator --authorizer CassandraAuthorizer
     networks:
       - chat-alpha-network
     volumes:

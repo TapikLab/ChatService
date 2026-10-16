@@ -1,3 +1,4 @@
+import { WriterTransportService } from '../message-writer/writer-transport.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesService } from './messages.service';
 import { MediaClientService } from '@modules/media-client/media-client.service';
@@ -9,6 +10,7 @@ describe('MessagesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessagesService,
+        { provide: WriterTransportService, useValue: {} },
         { provide: MediaClientService, useValue: {} },
         { provide: CassandraService, useValue: { client: {} } },
         { provide: ChatsService, useValue: {} },

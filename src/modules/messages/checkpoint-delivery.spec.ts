@@ -2,7 +2,9 @@ import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { types } from 'cassandra-driver';
 import { MessagesService } from './messages.service';
-import { ChatChainService } from './signing/chat-chain.service';
+import { WriterTransportService } from '../message-writer/writer-transport.service';
+import { parseAppendCommand, readMutation } from '../message-writer/contract';
+import { readCheckpoint } from './signing/checkpoint';
 import { createCheckpoint, encodeCheckpoint } from './signing/checkpoint';
 import { CassandraService } from '@common/cassandra/cassandra.service';
 import { ChatsService } from '@modules/chats/chats.service';
@@ -13,13 +15,22 @@ describe('CHECKPOINT delivery', () => {
     const rabbit = { emit: jest.fn() };
     const notification = { emit: jest.fn() };
     const assistant = { emit: jest.fn() };
-    const execute = jest.fn((query: string, params: unknown[]) => {
-      expect(Array.isArray(params)).toBe(true);
-      return Promise.resolve(
-        query.startsWith('SELECT')
-          ? { rowLength: 0, first: () => null }
-          : { wasApplied: () => true },
-      );
+    const execute = jest.fn();
+    const append = jest.fn(async (value: unknown) => {
+      const command = parseAppendCommand(value);
+      const checkpoint = readCheckpoint(command.message.content);
+      const mutation = readMutation(command.message.content);
+      return {
+        ...command.message,
+        senderId: command.senderId,
+        viaAssistant: command.viaAssistant,
+        messageId: types.TimeUuid.now().toString(),
+        attachments: [],
+        type: checkpoint ? 'CHECKPOINT' : mutation ? mutation.type : 'text',
+        chatSeq: 2,
+        chainHash: 'b'.repeat(64),
+        replayed: false,
+      };
     });
     const module = await Test.createTestingModule({
       providers: [
@@ -34,12 +45,8 @@ describe('CHECKPOINT delivery', () => {
           },
         },
         {
-          provide: ChatChainService,
-          useValue: {
-            append: jest
-              .fn()
-              .mockResolvedValue({ chatSeq: 2, chainHash: 'b'.repeat(64) }),
-          },
+          provide: WriterTransportService,
+          useValue: { append },
         },
         { provide: 'RABBITMQ_SERVICE', useValue: rabbit },
         { provide: 'NOTIFICATION_SERVICE', useValue: notification },
@@ -59,9 +66,7 @@ describe('CHECKPOINT delivery', () => {
       senderDeviceId: deviceId,
       seq: 1,
       prevHash: '0'.repeat(64),
-      messageHash: 'c'.repeat(64),
       signature: Buffer.alloc(64).toString('base64'),
-      claimChain: () => Promise.resolve(types.TimeUuid.now()),
     };
     return {
       module,
@@ -70,6 +75,7 @@ describe('CHECKPOINT delivery', () => {
       notification,
       assistant,
       execute,
+      append,
       userId,
       chatId,
       content,
@@ -92,10 +98,8 @@ describe('CHECKPOINT delivery', () => {
       );
       expect(f.notification.emit).not.toHaveBeenCalled();
       expect(f.assistant.emit).not.toHaveBeenCalled();
-      const insertion = f.execute.mock.calls.find(([query]) =>
-        query.startsWith('INSERT INTO messages'),
-      );
-      expect(insertion?.[1]).toContain('CHECKPOINT');
+      expect(f.append).toHaveBeenCalledTimes(1);
+      expect(f.execute).not.toHaveBeenCalled();
     } finally {
       await f.module.close();
     }
@@ -119,6 +123,35 @@ describe('CHECKPOINT delivery', () => {
       await f.module.close();
     }
   });
+  it.each(['EDIT', 'DELETE'] as const)(
+    'delivers %s without push, AI or direct database writes',
+    async (type) => {
+      const f = await fixture();
+      const target = types.TimeUuid.now().toString();
+      const payload =
+        type === 'EDIT' ? [1, type, target, 'new text'] : [1, type, target];
+      try {
+        await f.service.sendMessage(
+          f.userId,
+          {
+            chatId: f.chatId,
+            content: 'tapik.mutation.v1\n' + JSON.stringify(payload),
+          },
+          false,
+          f.meta,
+        );
+        expect(f.rabbit.emit).toHaveBeenCalledWith(
+          'message.sent',
+          expect.objectContaining({ type }),
+        );
+        expect(f.notification.emit).not.toHaveBeenCalled();
+        expect(f.assistant.emit).not.toHaveBeenCalled();
+        expect(f.execute).not.toHaveBeenCalled();
+      } finally {
+        await f.module.close();
+      }
+    },
+  );
   it.each(['unsigned', 'assistant', 'attachments'] as const)(
     'rejects %s checkpoint messages',
     async (mode) => {

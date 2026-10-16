@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Client } from 'cassandra-driver';
+import { auth, Client } from 'cassandra-driver';
 
 @Injectable()
 export class CassandraService implements OnModuleInit, OnModuleDestroy {
@@ -10,6 +10,10 @@ export class CassandraService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     this.client = new Client({
+      authProvider: new auth.PlainTextAuthProvider(
+        this.config.getOrThrow<string>('SCYLLA_USERNAME'),
+        this.config.getOrThrow<string>('SCYLLA_PASSWORD'),
+      ),
       contactPoints: [this.config.getOrThrow<string>('SCYLLA_CONTACT_POINT')],
       localDataCenter: 'datacenter1',
       keyspace: this.config.getOrThrow<string>('SCYLLA_KEYSPACE'),

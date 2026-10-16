@@ -89,7 +89,7 @@ export class ChatChainService {
       const existing = result.first();
       if (
         existing &&
-        String(existing.get('messageId')) === input.messageId.toString()
+        String(existing.get('message_id')) === input.messageId.toString()
       ) {
         if (
           existing.get('message_hash') !== input.messageHash ||

@@ -1,3 +1,4 @@
+import { isServiceMessageType } from '../message-writer/contract';
 import {
   Injectable,
   Inject,
@@ -283,7 +284,9 @@ export class ChatsService {
         });
 
         const unread = result.rows.filter(
-          (r) => String(r.get('sender_id')) !== userId,
+          (r) =>
+            String(r.get('sender_id')) !== userId &&
+            !isServiceMessageType(r.get('type')),
         );
 
         if (unread.length === 0) {
@@ -337,7 +340,7 @@ export class ChatsService {
 
   async getUserMessagesInChat(chatId: string, userId: string, limit = 15) {
     const result = await this.cassandra.client.execute(
-      `SELECT content, sender_id, via_assistant FROM messages WHERE chat_id = ? LIMIT ?`,
+      `SELECT content, sender_id, via_assistant, type FROM messages WHERE chat_id = ? LIMIT ?`,
       [chatId, limit * 4],
       { prepare: true },
     );
@@ -347,7 +350,8 @@ export class ChatsService {
         (r) =>
           String(r.get('sender_id')) === userId &&
           r.get('content') &&
-          !r.get('via_assistant'),
+          !r.get('via_assistant') &&
+          !isServiceMessageType(r.get('type')),
       )
       .slice(0, limit)
       .map((r) => r.get('content') as string);
@@ -355,13 +359,13 @@ export class ChatsService {
 
   async getRecentMessages(chatId: string, limit = 10) {
     const result = await this.cassandra.client.execute(
-      `SELECT sender_id, content, via_assistant, created_at FROM messages WHERE chat_id = ? LIMIT ?`,
+      `SELECT sender_id, content, via_assistant, created_at, type FROM messages WHERE chat_id = ? LIMIT ?`,
       [chatId, limit],
       { prepare: true },
     );
 
     return result.rows
-      .filter((r) => r.get('content'))
+      .filter((r) => r.get('content') && !isServiceMessageType(r.get('type')))
       .map((r) => ({
         senderId: String(r.get('sender_id')),
         content: r.get('content') as string,

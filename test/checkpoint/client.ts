@@ -238,6 +238,10 @@ export class CheckpointClient {
     });
   }
 
+  retryPending(): Promise<void> {
+    return this.serial(() => this.flush());
+  }
+
   sync(): Promise<void> {
     return this.serial(async () => {
       this.assertHealthy();

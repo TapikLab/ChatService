@@ -2,9 +2,11 @@ import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { types } from 'cassandra-driver';
 import { SendMessageDto } from './dto/send-message.dto';
-import { ChatChainService } from './signing/chat-chain.service';
-import { computeServerMessageHash } from './signing/chain-hash';
-import { computeContentHash } from './signing/message-signature';
+import { WriterTransportService } from '@modules/message-writer/writer-transport.service';
+import {
+  isServiceMessageType,
+  type SignedProof,
+} from '@modules/message-writer/contract';
 import { readCheckpoint } from './signing/checkpoint';
 import { CassandraService } from '@common/cassandra/cassandra.service';
 import { ChatsService } from '@modules/chats/chats.service';
@@ -22,14 +24,7 @@ interface StoredAttachment {
   placeholder: string | null;
 }
 
-export interface SignedMessageMeta {
-  senderDeviceId: string;
-  seq: number;
-  prevHash: string;
-  messageHash: string;
-  signature: string;
-  claimChain: () => Promise<types.TimeUuid>;
-}
+export type SignedMessageMeta = SignedProof;
 
 @Injectable()
 export class MessagesService {
@@ -37,7 +32,7 @@ export class MessagesService {
     private readonly mediaClient: MediaClientService,
     private readonly cassandra: CassandraService,
     private readonly chatsService: ChatsService,
-    private readonly chatChain: ChatChainService,
+    private readonly writer: WriterTransportService,
     @Inject('RABBITMQ_SERVICE') private readonly rabbitClient: ClientProxy,
     @Inject('NOTIFICATION_SERVICE')
     private readonly notificationClient: ClientProxy,
@@ -69,14 +64,6 @@ export class MessagesService {
       throw new BadRequestException('INVALID_CHECKPOINT_MESSAGE');
     }
 
-    const type = checkpoint
-      ? 'CHECKPOINT'
-      : dto.attachments?.length
-        ? dto.content
-          ? 'mixed'
-          : dto.attachments[0].type
-        : 'text';
-
     if (dto.attachments?.length) {
       const verifications = await Promise.all(
         dto.attachments.map((attachment) =>
@@ -96,186 +83,40 @@ export class MessagesService {
       });
     }
 
-    const messageId = signed ? await signed.claimChain() : types.TimeUuid.now();
-    const createdAt = signed ? messageId.getDate() : new Date();
-
-    if (signed) {
-      const stored = await this.findStoredMessage(dto.chatId, messageId);
-      if (stored) {
-        return {
-          chatId: dto.chatId,
-          messageId: messageId.toString(),
-          senderId,
-          content: dto.content,
-          type,
-          attachments: dto.attachments,
-          createdAt,
-          chatSeq: stored.chatSeq,
-          chainHash: stored.chainHash,
-          replayed: true,
-        };
-      }
-    }
-
-    const messageHash = signed
-      ? signed.messageHash
-      : computeServerMessageHash({
-          chatId: dto.chatId,
-          messageId: messageId.toString(),
-          senderId: senderId,
-          contentHash: computeContentHash(dto.content, dto.attachments),
-        });
-
-    const { chatSeq, chainHash } = await this.chatChain.append({
-      chatId: dto.chatId,
-      messageId,
-      messageHash,
-      kind: signed ? 'signed' : 'server',
-    });
-
-    const baseColumns = [
-      'chat_id',
-      'message_id',
-      'sender_id',
-      'content',
-      'created_at',
-      'type',
-      'attachments',
-      'via_assistant',
-      'chat_seq',
-      'chain_hash',
-      'message_hash',
-    ];
-
-    const baseParams: unknown[] = [
-      dto.chatId,
-      messageId,
+    const saved = await this.writer.append({
+      version: 1,
       senderId,
-      dto.content ?? null,
-      createdAt,
-      type,
-      dto.attachments?.map((a) => ({
-        media_id: a.mediaId,
-        url: a.url,
-        type: a.type,
-        file_name: a.fileName ?? null,
-        size_bytes: a.sizeBytes ?? null,
-        placeholder: a.placeholder ?? null,
-      })) ?? null,
-      viaAssistant,
-      types.Long.fromNumber(chatSeq),
-      chainHash,
-      messageHash,
-    ];
-
-    const columns = signed
-      ? [...baseColumns, 'sender_device_id', 'seq', 'prev_hash', 'signature']
-      : baseColumns;
-    const params = signed
-      ? [
-          ...baseParams,
-          signed.senderDeviceId,
-          types.Long.fromNumber(signed.seq),
-          signed.prevHash,
-          signed.signature,
-        ]
-      : baseParams;
-
-    const result = await this.cassandra.client.execute(
-      `INSERT INTO messages (${columns.join(', ')})
-       VALUES (${columns.map(() => '?').join(', ')})${signed ? ' IF NOT EXISTS' : ''}`,
-      params,
-      {
-        prepare: true,
-        ...(signed
-          ? { serialConsistency: types.consistencies.localSerial }
-          : {}),
-      },
-    );
-
-    if (signed && !result.wasApplied()) {
-      const stored = await this.findStoredMessage(dto.chatId, messageId);
-      return {
+      message: {
         chatId: dto.chatId,
-        messageId: messageId.toString(),
-        senderId,
         content: dto.content,
-        type,
         attachments: dto.attachments,
-        createdAt,
-        chatSeq: stored?.chatSeq ?? chatSeq,
-        chainHash: stored?.chainHash ?? chainHash,
-        replayed: true,
-      };
-    }
+      },
+      viaAssistant,
+      signed,
+      ...(signed ? {} : { messageId: types.TimeUuid.now().toString() }),
+    });
+    if (saved.replayed) return saved;
 
     const recipientIds = await this.chatsService.getMemberIds(dto.chatId);
+    this.rabbitClient.emit('message.sent', { ...saved, recipientIds });
 
-    this.rabbitClient.emit('message.sent', {
-      chatId: dto.chatId,
-      messageId: messageId.toString(),
-      senderId,
-      content: dto.content,
-      attachments: dto.attachments,
-      type,
-      createdAt,
-      recipientIds,
-      viaAssistant,
-      chatSeq,
-      chainHash,
-    });
-
-    if (!checkpoint) {
+    if (!isServiceMessageType(saved.type)) {
       this.notificationClient.emit('message.sent', {
-        chatId: dto.chatId,
-        senderId,
-        content: dto.content,
+        chatId: saved.chatId,
+        senderId: saved.senderId,
+        content: saved.content,
         recipientIds,
       });
-
       this.assistantClient.emit('message.sent', {
-        chatId: dto.chatId,
-        messageId: messageId.toString(),
-        senderId,
-        content: dto.content,
+        chatId: saved.chatId,
+        messageId: saved.messageId,
+        senderId: saved.senderId,
+        content: saved.content,
         recipientIds,
-        viaAssistant,
+        viaAssistant: saved.viaAssistant,
       });
     }
-
-    return {
-      chatId: dto.chatId,
-      messageId: messageId.toString(),
-      senderId,
-      content: dto.content,
-      type,
-      attachments: dto.attachments,
-      createdAt,
-      chatSeq,
-      chainHash,
-      replayed: false,
-    };
-  }
-
-  private async findStoredMessage(
-    chatId: string,
-    messageId: types.TimeUuid,
-  ): Promise<{ chatSeq: number | null; chainHash: string | null } | null> {
-    const result = await this.cassandra.client.execute(
-      `SELECT chat_seq, chain_hash FROM messages WHERE chat_id = ? AND message_id = ?`,
-      [chatId, messageId],
-      { prepare: true, consistency: types.consistencies.localSerial },
-    );
-    if (result.rowLength === 0) {
-      return null;
-    }
-
-    const row = result.first();
-    const chatSeq = row.get('chat_seq') as types.Long | null;
-    return {
-      chatSeq: chatSeq ? chatSeq.toNumber() : null,
-      chainHash: (row.get('chain_hash') as string | null) ?? null,
-    };
+    return saved;
   }
 
   async getChain(
@@ -349,6 +190,7 @@ export class MessagesService {
 
     return result.rows.map((row) => ({
       ...row,
+      editOf: row.get('edit_of') ? String(row.get('edit_of')) : null,
       chatId: String(row.get('chat_id')),
       messageId: String(row.get('message_id')),
       senderId: String(row.get('sender_id')),
