@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { types } from 'cassandra-driver';
 import { computeChainHash, GENESIS_HASH } from './chain-hash';
-import { CassandraService } from '@common/cassandra/cassandra.service';
+import { CassandraService } from '../../../common/cassandra/cassandra.service';
 
 const MAX_ATTEMPTS = 16;
 

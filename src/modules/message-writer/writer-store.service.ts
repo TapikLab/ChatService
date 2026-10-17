@@ -7,20 +7,20 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { types } from 'cassandra-driver';
-import { CassandraService } from '@common/cassandra/cassandra.service';
-import { ChatChainService } from '@modules/messages/signing/chat-chain.service';
-import { DeviceChainService } from '@modules/messages/signing/device-chain.service';
+import { CassandraService } from '../../common/cassandra/cassandra.service';
+import { ChatChainService } from '../messages/signing/chat-chain.service';
+import { DeviceChainService } from '../messages/signing/device-chain.service';
 import {
   buildSigningPayload,
   computeContentHash,
   computeMessageHash,
   verifyEd25519,
-} from '@modules/messages/signing/message-signature';
-import { computeServerMessageHash } from '@modules/messages/signing/chain-hash';
+} from '../messages/signing/message-signature';
+import { computeServerMessageHash } from '../messages/signing/chain-hash';
 import {
   readCheckpoint,
   verifyCheckpoint,
-} from '@modules/messages/signing/checkpoint';
+} from '../messages/signing/checkpoint';
 import {
   isServiceMessageType,
   parseAppendCommand,

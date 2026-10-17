@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'node:path';
-import { CassandraModule } from '@common/cassandra/cassandra.module';
+import { CassandraModule } from '../../common/cassandra/cassandra.module';
 import { DeviceChainService } from '../messages/signing/device-chain.service';
 import { ChatChainService } from '../messages/signing/chat-chain.service';
 import { WriterStoreService } from './writer-store.service';

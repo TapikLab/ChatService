@@ -1,3 +1,5 @@
+> **Текущий режим запуска:** сервисы приложения работают в терминалах macOS, writer и инфраструктура — в Docker. Запуск из корня Tapik: `./tapik.sh all`, один сервис: `./tapik.sh ChatService`, статус: `./tapik.sh status`. Полная актуальная инструкция — `TERMINAL-START.md` в корне Tapik. Ниже сохранено описание первоначального контейнерного развёртывания; контейнерные ChatService/ReactionsService и группа tapik-epic04 удалены. Writer запускается отдельно через scripts/epic04-runtime.sh, без Compose. В терминальном режиме строгая изоляция секретов от локального RCE не гарантируется.
+
 # Локальный запуск эпика 0.4
 
 Миграция выполнена 2026-10-16 на локальной Scylla 5.4. Включены PasswordAuthenticator и CassandraAuthorizer. Колонка `messages.edit_of` добавлена без изменения старых сообщений. Перед миграцией создан snapshot `before_epic04_20261016` для `chat_alpha_messages` и `chat_alpha_reactions`.
@@ -43,7 +45,7 @@ TS_NODE_BASEURL=./dist/src node -r tsconfig-paths/register dist/src/main.js
 
 Локальные `.env` ChatService и ReactionsService обновлены собственными DB-ролями. Для запуска ChatService прямо на хосте потребуется задать `NODE_EXTRA_CA_CERTS` на абсолютный путь `.local/epic04/tls.crt` до запуска Node.js; основной проверенный запуск — контейнерный.
 
-`.local/epic04/image/` — контекст собранного образа tapik-epic04-runtime:local. Он содержит скомпилированный код ChatService/ReactionsService и существующие lock-файлы; секретов в образе нет. После изменения исходников потребуется пересобрать соответствующий dist, обновить контекст образа и пересобрать образ перед перезапуском.
+Образ writer теперь называется `tapik-message-writer:local` и содержит только writer и используемые им модули подписи/цепочек. Dev-зависимости и точки запуска ChatService/ReactionsService исключены. Сборка: `./scripts/build-writer-image.sh` из каталога ChatService. Файл сборки — `Dockerfile.writer`, конфигурация TypeScript — `tsconfig.writer.json`. Секреты в контекст сборки не попадают. Старый общий образ `tapik-epic04-runtime:local` удалён.
 
 ## Выполненная проверка
 

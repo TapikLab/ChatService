@@ -1,6 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { types } from 'cassandra-driver';
-import { CassandraService } from '@common/cassandra/cassandra.service';
+import { CassandraService } from '../../../common/cassandra/cassandra.service';
 import { GENESIS_HASH } from './message-signature';
 
 interface ChainState {
