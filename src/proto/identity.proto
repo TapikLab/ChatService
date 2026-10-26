@@ -3,7 +3,11 @@ syntax = "proto3";
 package identity;
 
 service IdentityInternal {
-  rpc GetDeviceKey (GetDeviceKeyRequest) returns (GetDeviceKeyResponse);
+  rpc GetDeviceKey (GetDeviceKeyRequest)
+      returns (GetDeviceKeyResponse);
+
+  rpc GetDeviceRosters (GetDeviceRostersRequest)
+      returns (GetDeviceRostersResponse);
 }
 
 message GetDeviceKeyRequest {
@@ -15,4 +19,25 @@ message GetDeviceKeyResponse {
   bool found = 1;
   string publicKey = 2;
   bool revoked = 3;
+}
+
+message GetDeviceRostersRequest {
+  repeated string userIds = 1;
+}
+
+message DirectoryDevice {
+  string deviceId = 1;
+  string signingPublicKey = 2;
+  string identityKey = 3;
+  uint32 registrationId = 4;
+}
+
+message DeviceRoster {
+  string userId = 1;
+  string rosterHash = 2;
+  repeated DirectoryDevice devices = 3;
+}
+
+message GetDeviceRostersResponse {
+  repeated DeviceRoster rosters = 1;
 }

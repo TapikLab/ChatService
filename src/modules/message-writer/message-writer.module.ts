@@ -2,12 +2,16 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'node:path';
-import { CassandraModule } from '../../common/cassandra/cassandra.module';
-import { DeviceChainService } from '../messages/signing/device-chain.service';
-import { ChatChainService } from '../messages/signing/chat-chain.service';
+import { CassandraModule } from '@common/cassandra/cassandra.module';
+import { DeviceChainService } from '@modules/messages/signing/device-chain.service';
+import { ChatChainService } from '@modules/messages/signing/chat-chain.service';
 import { WriterStoreService } from './writer-store.service';
 import { WriterDeviceKeysService } from './writer-device-keys.service';
 import { WriterAuthGuard, WriterController } from './writer-http';
+import { EncryptedMessageValidator } from './encrypted-message-validator.service';
+import { EncryptedSendOperationsService } from './encrypted-send-operations.service';
+import { EncryptedWriterStoreService } from './encrypted-writer-store.service';
+import { EncryptedDeliveryOutboxService } from './encrypted-delivery-outbox.service';
 
 @Module({
   imports: [
@@ -33,6 +37,10 @@ import { WriterAuthGuard, WriterController } from './writer-http';
   providers: [
     WriterStoreService,
     WriterDeviceKeysService,
+    EncryptedMessageValidator,
+    EncryptedSendOperationsService,
+    EncryptedWriterStoreService,
+    EncryptedDeliveryOutboxService,
     WriterAuthGuard,
     DeviceChainService,
     ChatChainService,
