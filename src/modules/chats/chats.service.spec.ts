@@ -13,7 +13,7 @@ describe('ChatsService', () => {
         { provide: 'RABBITMQ_SERVICE', useValue: { emit: jest.fn() } },
         { provide: 'REACTIONS_SERVICE', useValue: { emit: jest.fn() } },
       ],
-    }).compile();
+    }).useMocker(() => ({})).compile();
 
     service = module.get<ChatsService>(ChatsService);
   });

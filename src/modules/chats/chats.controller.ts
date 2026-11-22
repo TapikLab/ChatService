@@ -6,45 +6,37 @@ import {
   Req,
   UseGuards,
   Param,
-  Delete,
+  HttpCode,
+  Header,
+  Query,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@common/auth/jwt-auth.guard';
 import { AuthenticatedRequest } from '@common/auth/authenticated-request.interface';
 import { ChatsService } from './chats.service';
-import { CreateChatDto } from './dto/create-chat.dto';
-import { AddMembersDto } from './dto/add-members.dto';
+import { ChatMembershipClient } from '@modules/chat-membership/chat-membership-client.service';
+import { ChatListService } from './chat-list.service';
+import type { ChatListPage } from './chat-list.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('chats')
 export class ChatsController {
-  constructor(private readonly chatsService: ChatsService) {}
+  constructor(
+    private readonly chatsService: ChatsService,
+    private readonly createChatService: ChatMembershipClient,
+    private readonly chatListService: ChatListService,
+  ) {}
 
   @Post()
-  create(@Req() req: AuthenticatedRequest, @Body() dto: CreateChatDto) {
-    return this.chatsService.createChat(req.user.userId, dto);
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  create(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    return this.createChatService.create(req.user.userId, body);
   }
 
   @Get()
-  myChats(@Req() req: AuthenticatedRequest) {
-    return this.chatsService.getUserChats(req.user.userId);
-  }
-
-  @Post(':chatId/members')
-  addMembers(
-    @Req() req: AuthenticatedRequest,
-    @Param('chatId') chatId: string,
-    @Body() dto: AddMembersDto,
-  ) {
-    return this.chatsService.addMembers(chatId, req.user.userId, dto.memberIds);
-  }
-
-  @Delete(':chatId/members/:userId')
-  removeMember(
-    @Req() req: AuthenticatedRequest,
-    @Param('chatId') chatId: string,
-    @Param('userId') userId: string,
-  ) {
-    return this.chatsService.removeMember(chatId, req.user.userId, userId);
+  @Header('Cache-Control', 'no-store')
+  myChats(@Req() req: AuthenticatedRequest, @Query() query: unknown) {
+    return this.chatListService.getPage(req.user.userId, query);
   }
 
   @Post(':chatId/read')

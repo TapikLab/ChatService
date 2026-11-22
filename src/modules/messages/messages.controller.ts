@@ -7,14 +7,14 @@ import {
   Query,
   Req,
   UseGuards,
-  BadRequestException,
+  Header,
+  HttpCode,
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
-import { SendMessageDto } from './dto/send-message.dto';
-import { SignedMessagesService } from './signing/signed-messages.service';
 import { JwtAuthGuard } from '@common/auth/jwt-auth.guard';
 import { AuthenticatedRequest } from '@common/auth/authenticated-request.interface';
-import { SendSignedMessageDto } from './dto/send-signed-message.dto';
+import { EncryptedSendService } from '@modules/messages/e2e/send/encrypted-send.service';
+import type { EncryptedSendReceipt } from '@modules/messages/e2e/protocol/encrypted-message.contract';
 import { GetChainQueryDto } from './dto/get-chain-query.dto';
 
 @UseGuards(JwtAuthGuard)
@@ -22,37 +22,17 @@ import { GetChainQueryDto } from './dto/get-chain-query.dto';
 export class MessagesController {
   constructor(
     private readonly messagesService: MessagesService,
-    private readonly signedMessagesService: SignedMessagesService,
+    private readonly encryptedSend: EncryptedSendService,
   ) {}
 
   @Post('messages')
-  send(@Req() req: AuthenticatedRequest, @Body() dto: SendSignedMessageDto) {
-    return this.signedMessagesService.send(req.user.userId, dto);
-  }
-
-  @Get(':chatId/messages')
-  history(
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  send(
     @Req() req: AuthenticatedRequest,
-    @Param('chatId') chatId: string,
-    @Query('limit') limit?: string,
-    @Query('before') before?: string,
-  ) {
-    const parsedLimit: number = limit === undefined ? 50 : Number(limit);
-    if (
-      !Number.isInteger(parsedLimit) ||
-      parsedLimit < 1 ||
-      parsedLimit > 100
-    ) {
-      throw new BadRequestException(
-        'limit должен быть целым числом от 1 до 100',
-      );
-    }
-    return this.messagesService.getHistory(
-      chatId,
-      req.user.userId,
-      parsedLimit,
-      before,
-    );
+    @Body() body: unknown,
+  ): Promise<EncryptedSendReceipt> {
+    return this.encryptedSend.send(req.user.userId, body);
   }
 
   @Get(':chatId/chain')

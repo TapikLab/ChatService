@@ -1,5 +1,7 @@
 # ChatService
 
+[Серверный E2EE: отправка, квитанции, outbox и восстановление](docs/e2ee.md)
+
 Ядро обмена сообщениями платформы **Tapik**: чаты, сообщения, realtime-доставка через WebSocket, статусы прочтения. Центральный сервис, с которым интегрируются AIAssistantService (отложенные сообщения), ReactionsService (реакции), MediaService (вложения) и NotificationService (push).
 
 ## Роль в системе

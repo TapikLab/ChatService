@@ -12,6 +12,8 @@ import { Server, Socket } from 'socket.io';
 import { RedisService } from '@common/redis/redis.service';
 
 const FRONTEND_ORIGIN = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+const USER_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 interface SocketData {
   userId?: string;
@@ -35,17 +37,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const token: string | undefined =
         (client.handshake.auth?.token as string | undefined) ||
         client.handshake.headers?.authorization?.replace('Bearer ', '');
-
       if (!token) {
         throw new Error('No token provided');
       }
 
       const payload = await this.jwtService.verifyAsync<{ sub: string }>(token);
       const userId = payload.sub;
+      if (
+        typeof userId !== 'string' ||
+        userId.length !== 36 ||
+        !USER_ID_PATTERN.test(userId)
+      ) {
+        throw new Error('INVALID_TOKEN_SUBJECT');
+      }
 
       (client.data as SocketData).userId = userId;
       await this.redisService.client.sadd(`user_sockets:${userId}`, client.id);
-      await this.redisService.client.expire(`user_sockets:${userId}`, 86_400); //временно
+      await this.redisService.client.expire(`user_sockets:${userId}`, 86_400);
+      await client.join(`user:${userId}`);
 
       this.logger.log(
         `Клиент подключён: userId=${userId}, socketId=${client.id}`,

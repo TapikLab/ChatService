@@ -10,9 +10,11 @@ async function bootstrap(): Promise<void> {
   const key = process.env.MESSAGE_WRITER_TLS_KEY_FILE;
   if (Boolean(cert) !== Boolean(key))
     throw new Error('WRITER_TLS_CERT_AND_KEY_REQUIRED');
+
   const host = process.env.MESSAGE_WRITER_HOST ?? '127.0.0.1';
   if (!cert && !['127.0.0.1', '::1'].includes(host))
     throw new Error('WRITER_TLS_REQUIRED_FOR_NON_LOOPBACK_BIND');
+
   const app = await NestFactory.create<NestExpressApplication>(
     MessageWriterModule,
     {
@@ -24,7 +26,10 @@ async function bootstrap(): Promise<void> {
   );
 
   try {
-    app.useBodyParser('json', { limit: '96kb', strict: true });
+    app.useBodyParser('json', {
+      limit: '256kb',
+      strict: true,
+    });
     app.enableShutdownHooks();
     const port = Number(
       app.get(ConfigService).get<string>('MESSAGE_WRITER_PORT') ?? '3009',

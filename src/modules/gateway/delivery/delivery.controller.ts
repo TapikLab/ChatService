@@ -41,9 +41,7 @@ export class DeliveryController {
   ) {}
 
   @EventPattern('message.sent')
-  async handleMessageSent(@Payload() event: MessageSentEvent) {
-    await this.fanOut(event.recipientIds, 'message', event);
-  }
+  handleMessageSent(): void {}
 
   @EventPattern('message.reaction')
   async handleMessageReaction(@Payload() event: MessageReactionEvent) {

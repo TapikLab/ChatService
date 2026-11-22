@@ -1,4 +1,4 @@
-import { SignedMessagesService } from './signing/signed-messages.service';
+import { EncryptedSendService } from '@modules/messages/e2e/send/encrypted-send.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
@@ -11,7 +11,7 @@ describe('MessagesController', () => {
       controllers: [MessagesController],
       providers: [
         { provide: MessagesService, useValue: {} },
-        { provide: SignedMessagesService, useValue: {} },
+        { provide: EncryptedSendService, useValue: {} },
       ],
     }).compile();
 

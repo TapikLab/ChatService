@@ -1,4 +1,4 @@
-import { WriterTransportService } from '../message-writer/writer-transport.service';
+import { WriterTransportService } from '@modules/message-writer/legacy/writer-transport.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesService } from './messages.service';
 import { MediaClientService } from '@modules/media-client/media-client.service';

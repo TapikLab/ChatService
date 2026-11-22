@@ -2,8 +2,8 @@ import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { types } from 'cassandra-driver';
 import { MessagesService } from './messages.service';
-import { WriterTransportService } from '../message-writer/writer-transport.service';
-import { parseAppendCommand, readMutation } from '../message-writer/contract';
+import { WriterTransportService } from '@modules/message-writer/legacy/writer-transport.service';
+import { parseAppendCommand, readMutation } from '@modules/message-writer/legacy/contract';
 import { readCheckpoint } from './signing/checkpoint';
 import { createCheckpoint, encodeCheckpoint } from './signing/checkpoint';
 import { CassandraService } from '@common/cassandra/cassandra.service';
@@ -83,99 +83,12 @@ describe('CHECKPOINT delivery', () => {
     };
   }
 
-  it('stores and delivers CHECKPOINT without push or AI events', async () => {
-    const f = await fixture();
+  it.each(['CHECKPOINT', 'EDIT', 'DELETE', 'text'])('rejects plaintext %s before dispatch', async kind => {
+    const { service, userId, chatId, append, rabbit, notification, assistant, module } = await fixture();
     try {
-      await f.service.sendMessage(
-        f.userId,
-        { chatId: f.chatId, content: f.content },
-        false,
-        f.meta,
-      );
-      expect(f.rabbit.emit).toHaveBeenCalledWith(
-        'message.sent',
-        expect.objectContaining({ type: 'CHECKPOINT', content: f.content }),
-      );
-      expect(f.notification.emit).not.toHaveBeenCalled();
-      expect(f.assistant.emit).not.toHaveBeenCalled();
-      expect(f.append).toHaveBeenCalledTimes(1);
-      expect(f.execute).not.toHaveBeenCalled();
-    } finally {
-      await f.module.close();
-    }
+      await expect(service.sendMessage(userId, {chatId, content: kind})).rejects.toThrow('E2EE_REQUIRED');
+      expect(append).not.toHaveBeenCalled();
+      for (const broker of [rabbit,notification,assistant]) expect(broker.emit).not.toHaveBeenCalled();
+    } finally { await module.close(); }
   });
-  it('preserves push and AI events for ordinary messages', async () => {
-    const f = await fixture();
-    try {
-      await f.service.sendMessage(
-        f.userId,
-        { chatId: f.chatId, content: 'hello' },
-        false,
-        f.meta,
-      );
-      expect(f.rabbit.emit).toHaveBeenCalledWith(
-        'message.sent',
-        expect.objectContaining({ type: 'text' }),
-      );
-      expect(f.notification.emit).toHaveBeenCalledTimes(1);
-      expect(f.assistant.emit).toHaveBeenCalledTimes(1);
-    } finally {
-      await f.module.close();
-    }
-  });
-  it.each(['EDIT', 'DELETE'] as const)(
-    'delivers %s without push, AI or direct database writes',
-    async (type) => {
-      const f = await fixture();
-      const target = types.TimeUuid.now().toString();
-      const payload =
-        type === 'EDIT' ? [1, type, target, 'new text'] : [1, type, target];
-      try {
-        await f.service.sendMessage(
-          f.userId,
-          {
-            chatId: f.chatId,
-            content: 'tapik.mutation.v1\n' + JSON.stringify(payload),
-          },
-          false,
-          f.meta,
-        );
-        expect(f.rabbit.emit).toHaveBeenCalledWith(
-          'message.sent',
-          expect.objectContaining({ type }),
-        );
-        expect(f.notification.emit).not.toHaveBeenCalled();
-        expect(f.assistant.emit).not.toHaveBeenCalled();
-        expect(f.execute).not.toHaveBeenCalled();
-      } finally {
-        await f.module.close();
-      }
-    },
-  );
-  it.each(['unsigned', 'assistant', 'attachments'] as const)(
-    'rejects %s checkpoint messages',
-    async (mode) => {
-      const f = await fixture();
-      try {
-        await expect(
-          f.service.sendMessage(
-            f.userId,
-            {
-              chatId: f.chatId,
-              content: f.content,
-              ...(mode === 'attachments'
-                ? { attachments: [{ mediaId: randomUUID(), type: 'file' }] }
-                : {}),
-            },
-            mode === 'assistant',
-            mode === 'unsigned' ? undefined : f.meta,
-          ),
-        ).rejects.toThrow('INVALID_CHECKPOINT_MESSAGE');
-        expect(f.execute).not.toHaveBeenCalled();
-        expect(f.rabbit.emit).not.toHaveBeenCalled();
-      } finally {
-        await f.module.close();
-      }
-    },
-  );
 });

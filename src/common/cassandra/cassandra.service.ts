@@ -1,10 +1,15 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { auth, Client } from 'cassandra-driver';
 
 @Injectable()
-export class CassandraService implements OnModuleInit, OnModuleDestroy {
+export class CassandraService implements OnModuleInit, OnApplicationShutdown {
   public client!: Client;
+  private shutdownPromise?: Promise<void>;
 
   constructor(private readonly config: ConfigService) {}
 
@@ -25,7 +30,11 @@ export class CassandraService implements OnModuleInit, OnModuleDestroy {
     await this.client.connect();
   }
 
-  async onModuleDestroy() {
-    await this.client.shutdown();
+  async onApplicationShutdown(): Promise<void> {
+    if (!this.client) return;
+
+    if (!this.shutdownPromise) this.shutdownPromise = this.client.shutdown();
+
+    await this.shutdownPromise;
   }
 }

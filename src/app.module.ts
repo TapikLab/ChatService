@@ -10,6 +10,7 @@ import { ChatsModule } from '@modules/chats/chats.module';
 import { GatewayModule } from '@modules/gateway/gateway.module';
 import { MediaClientModule } from '@modules/media-client/media-client.module';
 import { GrpcInternalModule } from '@modules/grpc-internal/grpc-internal.module';
+import { GroupContextModule } from '@modules/group-context/group-context.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { GrpcInternalModule } from '@modules/grpc-internal/grpc-internal.module'
     GatewayModule,
     MediaClientModule,
     GrpcInternalModule,
+    GroupContextModule,
   ],
   controllers: [AppController],
   providers: [AppService],
